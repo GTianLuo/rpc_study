@@ -28,5 +28,5 @@ const (
 
 func init() {
 	NewCodecFuncMap = make(map[Type]NewCodecFunc)
-	//NewCodecFuncMap[GobType] =
+	NewCodecFuncMap[GobType] = NewGobCodec
 }
