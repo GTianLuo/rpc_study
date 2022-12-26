@@ -7,7 +7,6 @@ import (
 	"geerpc/codec"
 	"log"
 	"net"
-	"time"
 )
 
 func startServer(addr chan string) {
@@ -24,12 +23,10 @@ func startServer(addr chan string) {
 func main() {
 	addr := make(chan string)
 	go startServer(addr)
-
 	// in fact, following code is like a simple geerpc client
 	conn, _ := net.Dial("tcp", <-addr)
 	defer func() { _ = conn.Close() }()
 
-	time.Sleep(time.Second)
 	// send options
 	_ = json.NewEncoder(conn).Encode(geerpc.DefaultOption)
 	cc := codec.NewGobCodec(conn)

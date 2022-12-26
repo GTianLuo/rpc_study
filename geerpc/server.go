@@ -18,6 +18,13 @@ type Option struct {
 	CodecType   codec.Type
 }
 
+func NewOption(codecType codec.Type) *Option {
+	return &Option{
+		MagicNumber: MagicNumber,
+		CodecType:   codecType,
+	}
+}
+
 type Server struct{}
 
 func NewServer() *Server {
@@ -38,6 +45,7 @@ func (server *Server) Accept(lis net.Listener) {
 			log.Error("rpc server : accept error:", err)
 			return
 		}
+		log.Infof("server Connect client : %s\n", conn.RemoteAddr())
 		go server.ServeConn(conn)
 	}
 }
