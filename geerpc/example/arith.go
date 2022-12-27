@@ -1,5 +1,7 @@
 package example
 
+import "time"
+
 type Arith struct {
 }
 type Args struct {
@@ -12,6 +14,7 @@ type Reply struct {
 }
 
 func (a *Arith) Add(args Args, reply *Reply) error {
+	time.Sleep(time.Second * 2)
 	reply.C = args.A + args.B
 	return nil
 }

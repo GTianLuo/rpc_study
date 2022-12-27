@@ -1,6 +1,7 @@
 package geerpc
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 // Call 一次RPC调用的全部信息
@@ -105,7 +107,7 @@ func (client *Client) receive() {
 		call := client.removeCall(h.Seq)
 		switch {
 		case call == nil:
-			//TODO:没搞懂这一步有什么用
+			//读走废掉的数据
 			err = client.cc.ReadBody(nil)
 		case h.Error != "":
 			//服务端在处理该请求时出现异常
@@ -150,15 +152,45 @@ func newClient(cc codec.Codec, conn io.ReadWriteCloser, opt *Option) *Client {
 }
 
 func Dail(network, address string, opt *Option) (*Client, error) {
-	conn, err := net.Dial(network, address)
+	return dailTimeOut(network, address, opt)
+}
+
+type clientResult struct {
+	client *Client
+	err    error
+}
+
+func dailTimeOut(network, address string, opt *Option) (*Client, error) {
+	t1 := time.Now().Second()
+	conn, err := net.DialTimeout(network, address, opt.ConnTimeOut)
 	if err != nil {
 		return nil, err
 	}
-	client, err := NewClient(conn, opt)
-	if err != nil {
-		_ = conn.Close()
+	ch := make(chan *clientResult, 1)
+	go func() {
+		client, err := NewClient(conn, opt)
+		ch <- &clientResult{
+			client: client,
+			err:    err,
+		}
+	}()
+	defer func() {
+		if err != nil {
+			_ = conn.Close()
+		}
+	}()
+	if opt.ConnTimeOut == 0 {
+		cResult := <-ch
+		return cResult.client, cResult.err
 	}
-	return client, nil
+	remainTime := opt.ConnTimeOut - time.Second*time.Duration(time.Now().Second()-t1)
+	select {
+	case <-time.After(remainTime):
+		err = errors.New("rpc client: connect time out")
+		return nil, err
+	case cResult := <-ch:
+		return cResult.client, cResult.err
+	}
 }
 
 func (client *Client) send(c *Call) error {
@@ -185,16 +217,21 @@ func (client *Client) send(c *Call) error {
 	return nil
 }
 
-func (client *Client) Call(serviceMethod string, args interface{}, reply interface{}) error {
-	done, err := client.Go(serviceMethod, args, reply)
+func (client *Client) Call(ctx context.Context, serviceMethod string, args interface{}, reply interface{}) error {
+	call, err := client.Go(serviceMethod, args, reply)
 	if err != nil {
 		return err
 	}
-	return (<-done).Error
-
+	select {
+	case <-ctx.Done():
+		client.removeCall(call.Seq)
+		return errors.New("rpc client: call failed: time out")
+	case call = <-call.Done:
+		return call.Error
+	}
 }
 
-func (client *Client) Go(serviceMethod string, args interface{}, reply interface{}) (chan *Call, error) {
+func (client *Client) Go(serviceMethod string, args interface{}, reply interface{}) (*Call, error) {
 	//封装Call
 	call := &Call{
 		ServiceMethod: serviceMethod,
@@ -206,6 +243,5 @@ func (client *Client) Go(serviceMethod string, args interface{}, reply interface
 	if err := client.send(call); err != nil {
 		return nil, err
 	}
-
-	return call.Done, nil
+	return call, nil
 }

@@ -22,3 +22,18 @@ func TestService(t *testing.T) {
 	fmt.Println(reply.C)
 	//println(reflect.ValueOf(&example.Arith{}).Method(1).Type())
 }
+
+func TestGoroutine(t *testing.T) {
+
+	ch := make(chan int)
+	go func() {
+		go func() {
+			for {
+				fmt.Println(11111111111)
+			}
+		}()
+	}()
+
+	<-ch
+}
+

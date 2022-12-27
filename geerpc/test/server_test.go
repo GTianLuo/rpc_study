@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"geerpc"
@@ -76,7 +77,7 @@ func TestClient3(t *testing.T) {
 		arg := "rpc request"
 		var reply string
 		fmt.Println("")
-		err := client.Call("Method.Add", arg, &reply)
+		err := client.Call(context.Background(), "Method.Add", arg, &reply)
 		if err != nil {
 			fmt.Println(err)
 			return

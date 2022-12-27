@@ -1,8 +1,10 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"geerpc"
+	"geerpc/codec"
 	"geerpc/example"
 	"log"
 	"net"
@@ -23,7 +25,7 @@ func TestServer2(t *testing.T) {
 }
 
 func TestClient4(t *testing.T) {
-	client, _ := geerpc.Dail("tcp", "localhost:9997", geerpc.DefaultOption)
+	client, _ := geerpc.Dail("tcp", "localhost:9997", &geerpc.Option{MagicNumber: geerpc.MagicNumber, CodecType: codec.GobType, HandleTimeOut: 1})
 	defer client.Close()
 	arg := &example.Args{
 		A: 10,
@@ -31,11 +33,19 @@ func TestClient4(t *testing.T) {
 	}
 	reply := &example.Reply{}
 
-	client.Call("Arith.Add", arg, reply)
-	fmt.Println("Arith.Add:", reply.C)
-	client.Call("Arith.Mul", arg, reply)
-	fmt.Println("Arith.Mul:", reply.C)
-	client.Call("Arith.Sub", arg, reply)
-	fmt.Println("Arith.Sub:", reply.C)
+	err := client.Call(context.Background(), "Arith.Add", arg, reply)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(context.Background(), "Arith.Add:", reply.C)
+	err = client.Call(context.Background(), "Arith.Mul", arg, reply)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(context.Background(), "Arith.Mul:", reply.C)
+	err = client.Call(context.Background(), "Arith.Sub", arg, reply)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(context.Background(), "Arith.Sub:", reply.C)
 }
-

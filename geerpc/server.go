@@ -3,6 +3,7 @@ package geerpc
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"geerpc/codec"
 	"geerpc/log"
 	"io"
@@ -10,19 +11,23 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 )
 
 const MagicNumber = 0x3bef5c //16 767 534
 
 type Option struct {
-	MagicNumber int
-	CodecType   codec.Type
+	MagicNumber   int
+	CodecType     codec.Type
+	ConnTimeOut   time.Duration //0 表示不超时
+	HandleTimeOut time.Duration //0 表示不超时
 }
 
 func NewOption(codecType codec.Type) *Option {
 	return &Option{
 		MagicNumber: MagicNumber,
 		CodecType:   codecType,
+		ConnTimeOut: 10,
 	}
 }
 
@@ -114,12 +119,12 @@ func (server *Server) ServeConn(conn io.ReadWriteCloser) {
 		log.Error("rpc server: invalid codec type")
 		return
 	}
-	server.ServeCodec(f(conn))
+	server.ServeCodec(f(conn), opt.HandleTimeOut)
 }
 
 var invalidRequest = struct{}{}
 
-func (server *Server) ServeCodec(cc codec.Codec) {
+func (server *Server) ServeCodec(cc codec.Codec, handleTimeOut time.Duration) {
 	sending := new(sync.Mutex)
 	wg := new(sync.WaitGroup)
 	for {
@@ -134,7 +139,7 @@ func (server *Server) ServeCodec(cc codec.Codec) {
 			continue
 		}
 		wg.Add(1)
-		go server.handleRequest(cc, request, sending, wg)
+		go server.handleRequest(cc, request, sending, wg, handleTimeOut)
 	}
 	wg.Wait()
 	_ = cc.Close()
@@ -181,12 +186,33 @@ func (server *Server) sendResponse(cc codec.Codec, h *codec.Header, body interfa
 	}
 }
 
-func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup) {
+func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup, handleTimeOut time.Duration) {
 	defer wg.Done()
-	log.Info(req.h, req.argv)
-	if err := req.service.call(req.mTyp, req.argv, req.replyv); err != nil {
-		server.sendResponse(cc, req.h, invalidRequest, sending)
+	called := make(chan bool)
+	go func() {
+		log.Info(req.h, req.argv)
+		err := req.service.call(req.mTyp, req.argv, req.replyv)
+		select {
+		case called <- true:
+		default: //超时
+			return
+		}
+		if err != nil {
+			req.h.Error = err.Error()
+			server.sendResponse(cc, req.h, invalidRequest, sending)
+			return
+		}
+		server.sendResponse(cc, req.h, req.replyv.Interface(), sending)
+	}()
+	if handleTimeOut == 0 {
+		<-called
 		return
 	}
-	server.sendResponse(cc, req.h, req.replyv.Interface(), sending)
+	select {
+	case <-time.After(handleTimeOut):
+		req.h.Error = fmt.Sprintf("rpc server: request handle timeout: expect within %s", handleTimeOut)
+		server.sendResponse(cc, req.h, invalidRequest, sending)
+	case <-called:
+	}
+
 }
