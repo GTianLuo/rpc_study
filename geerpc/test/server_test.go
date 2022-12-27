@@ -6,12 +6,13 @@ import (
 	"geerpc"
 	"geerpc/codec"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 )
 
 func TestServer(t *testing.T) {
-	conn, err := net.Listen("tcp", "localhost:9999")
+	conn, err := net.Listen("tcp", "localhost:9997")
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -19,13 +20,13 @@ func TestServer(t *testing.T) {
 }
 
 func TestClient(t *testing.T) {
-	conn, err := net.Dial("tcp", "localhost:9999")
+	conn, err := net.Dial("tcp", "localhost:9997")
 	defer conn.Close()
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	time.Sleep(time.Second)
+	//time.Sleep(time.Second)
 	e := json.NewEncoder(conn)
 	_ = e.Encode(geerpc.DefaultOption)
 
@@ -69,7 +70,7 @@ func TestClient2(t *testing.T) {
 }
 
 func TestClient3(t *testing.T) {
-	client, _ := geerpc.Dail("tcp", "localhost:9999", geerpc.DefaultOption)
+	client, _ := geerpc.Dail("tcp", "localhost:9997", geerpc.DefaultOption)
 	defer client.Close()
 	for i := 0; i < 10; i++ {
 		arg := "rpc request"
@@ -82,4 +83,12 @@ func TestClient3(t *testing.T) {
 		}
 		fmt.Println(reply)
 	}
+}
+
+func TestReflect(t *testing.T) {
+	s := make([]int, 0)
+	sTyp := reflect.TypeOf(&s)
+	fmt.Println(sTyp)
+	fmt.Println(sTyp.Elem())
+
 }

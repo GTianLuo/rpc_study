@@ -33,7 +33,6 @@ type Client struct {
 	opt      *Option
 	sending  sync.Mutex //保证消息的有序发送
 	mu       sync.Mutex //保证对Client自身操作的安全性
-	conn     io.ReadWriteCloser
 	header   codec.Header
 	seq      uint64
 	pending  map[uint64]*Call
@@ -50,7 +49,7 @@ func (client *Client) Close() error {
 		return ErrShutdown
 	}
 	client.closing = true
-	_ = client.conn.Close()
+	_ = client.cc.Close()
 	return nil
 }
 
@@ -144,7 +143,6 @@ func newClient(cc codec.Codec, conn io.ReadWriteCloser, opt *Option) *Client {
 		cc:      cc,
 		opt:     opt,
 		seq:     1,
-		conn:    conn,
 		pending: make(map[uint64]*Call),
 	}
 	go client.receive()
@@ -172,12 +170,11 @@ func (client *Client) send(c *Call) error {
 		return err
 	}
 	//封装消息头
-	var h codec.Header
-	h.Seq = seq
-	h.ServiceMethod = c.ServiceMethod
+	client.header.Seq = seq
+	client.header.ServiceMethod = c.ServiceMethod
 
 	//发送消息
-	if err := client.cc.Write(&h, c.Args); err != nil {
+	if err := client.cc.Write(&client.header, c.Args); err != nil {
 		call := client.removeCall(c.Seq)
 		if call != nil {
 			call.Error = err
