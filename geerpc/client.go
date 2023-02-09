@@ -1,6 +1,7 @@
 package geerpc
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,8 @@ import (
 	"geerpc/log"
 	"io"
 	"net"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -43,6 +46,8 @@ type Client struct {
 }
 
 var ErrShutdown = errors.New("connecting is shut down")
+
+type dailFunc func(conn io.ReadWriteCloser, opt *Option) (*Client, error)
 
 func (client *Client) Close() error {
 	client.mu.Lock()
@@ -152,7 +157,7 @@ func newClient(cc codec.Codec, conn io.ReadWriteCloser, opt *Option) *Client {
 }
 
 func Dail(network, address string, opt *Option) (*Client, error) {
-	return dailTimeOut(network, address, opt)
+	return dailTimeOut(NewClient, network, address, opt)
 }
 
 type clientResult struct {
@@ -160,7 +165,7 @@ type clientResult struct {
 	err    error
 }
 
-func dailTimeOut(network, address string, opt *Option) (*Client, error) {
+func dailTimeOut(f dailFunc, network, address string, opt *Option) (*Client, error) {
 	t1 := time.Now().Second()
 	conn, err := net.DialTimeout(network, address, opt.ConnTimeOut)
 	if err != nil {
@@ -168,7 +173,7 @@ func dailTimeOut(network, address string, opt *Option) (*Client, error) {
 	}
 	ch := make(chan *clientResult, 1)
 	go func() {
-		client, err := NewClient(conn, opt)
+		client, err := f(conn, opt)
 		ch <- &clientResult{
 			client: client,
 			err:    err,
@@ -244,4 +249,36 @@ func (client *Client) Go(serviceMethod string, args interface{}, reply interface
 		return nil, err
 	}
 	return call, nil
+}
+
+func NewHTTPClient(conn io.ReadWriteCloser, opt *Option) (*Client, error) {
+	_, _ = io.WriteString(conn, fmt.Sprintf("CONNECT %s HTTP/1.0\n\n", defaultRPCPath))
+	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: "CONNECT"})
+	if err == nil && resp.Status == connected {
+		return NewClient(conn, opt)
+	}
+	if err == nil {
+		err = errors.New("unexpect HTTP Response: " + resp.Status)
+	}
+	return nil, err
+}
+
+//type dailFunc func(conn io.ReadWriteCloser, opt *Option) (*Client, error)
+
+func DialHTTP(network, address string, opt *Option) (*Client, error) {
+	return dailTimeOut(NewHTTPClient, network, address, opt)
+}
+
+func XDail(rpcAddr string, opts *Option) (*Client, error) {
+	parts := strings.Split(rpcAddr, "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("rpc client err:wrong format '%s',expect protocol@addr", rpcAddr)
+	}
+	protocol, addr := parts[0], parts[1]
+	switch protocol {
+	case "http":
+		return DialHTTP("tcp", addr, opts)
+	default:
+		return Dail(protocol, addr, opts)
+	}
 }

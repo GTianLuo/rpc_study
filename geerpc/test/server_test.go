@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"geerpc"
 	"geerpc/codec"
+	"geerpc/example"
 	"net"
 	"reflect"
 	"testing"
@@ -87,9 +88,7 @@ func TestClient3(t *testing.T) {
 }
 
 func TestReflect(t *testing.T) {
-	s := make([]int, 0)
-	sTyp := reflect.TypeOf(&s)
-	fmt.Println(sTyp)
-	fmt.Println(sTyp.Elem())
-
+	arith := example.Arith{}
+	fmt.Println(reflect.TypeOf(arith).NumMethod())
+	fmt.Println(reflect.TypeOf(&arith).NumMethod())
 }

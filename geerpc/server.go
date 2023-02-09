@@ -8,13 +8,19 @@ import (
 	"geerpc/log"
 	"io"
 	"net"
+	"net/http"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
 )
 
-const MagicNumber = 0x3bef5c //16 767 534
+const (
+	MagicNumber      = 0x3bef5c //16 767 534
+	connected        = "200 Connected to Gee RPC"
+	defaultRPCPath   = "/_geeRPC_"
+	defaultDebugPath = "/debug/geeRPC"
+)
 
 type Option struct {
 	MagicNumber   int
@@ -172,6 +178,7 @@ func (server *Server) readRequestHeader(cc codec.Codec) (*codec.Header, error) {
 	if err := cc.ReadHeader(&h); err != nil {
 		if err != io.EOF && err != io.ErrUnexpectedEOF {
 			log.Error("rpc server : read header error :", err)
+			return nil, err
 		}
 		return nil, err
 	}
@@ -214,5 +221,29 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.
 		server.sendResponse(cc, req.h, invalidRequest, sending)
 	case <-called:
 	}
+}
 
+func (server *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.Method != "CONNECT" {
+		w.Header().Set("Context-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, _ = io.WriteString(w, "Connect method must be CONNECT")
+		return
+	}
+	conn, _, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		log.Error("rpc hijacker", req.RemoteAddr, ":", err.Error())
+	}
+	_, _ = io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
+	server.ServeConn(conn)
+}
+
+func (server *Server) HandleHTTP() {
+	http.Handle(defaultRPCPath, server)
+	http.Handle(defaultDebugPath, debugHTTP{server})
+	log.Info("rpc server debug path:", defaultDebugPath)
+}
+
+func HandleHTTP() {
+	DefaultServer.HandleHTTP()
 }
