@@ -135,7 +135,7 @@ func (server *Server) ServeCodec(cc codec.Codec, handleTimeOut time.Duration) {
 				break
 			}
 			request.h.Error = err.Error()
-			server.sendResponse(cc, request.h, invalidRequest, sending)
+			server.sendResponse(cc, *request.h, invalidRequest, sending)
 			continue
 		}
 		wg.Add(1)
@@ -178,7 +178,7 @@ func (server *Server) readRequestHeader(cc codec.Codec) (*codec.Header, error) {
 	return &h, nil
 }
 
-func (server *Server) sendResponse(cc codec.Codec, h *codec.Header, body interface{}, sending *sync.Mutex) {
+func (server *Server) sendResponse(cc codec.Codec, h codec.Header, body interface{}, sending *sync.Mutex) {
 	sending.Lock()
 	defer sending.Unlock()
 	if err := cc.Write(h, body); err != nil {
@@ -199,10 +199,10 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.
 		}
 		if err != nil {
 			req.h.Error = err.Error()
-			server.sendResponse(cc, req.h, invalidRequest, sending)
+			server.sendResponse(cc, *req.h, invalidRequest, sending)
 			return
 		}
-		server.sendResponse(cc, req.h, req.replyv.Interface(), sending)
+		server.sendResponse(cc, *req.h, req.replyv.Interface(), sending)
 	}()
 	if handleTimeOut == 0 {
 		<-called
@@ -211,7 +211,7 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.
 	select {
 	case <-time.After(handleTimeOut):
 		req.h.Error = fmt.Sprintf("rpc server: request handle timeout: expect within %s", handleTimeOut)
-		server.sendResponse(cc, req.h, invalidRequest, sending)
+		server.sendResponse(cc, *req.h, invalidRequest, sending)
 	case <-called:
 	}
 

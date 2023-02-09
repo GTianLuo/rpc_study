@@ -9,6 +9,7 @@ import (
 	"geerpc/log"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -206,7 +207,7 @@ func (client *Client) send(c *Call) error {
 	client.header.ServiceMethod = c.ServiceMethod
 
 	//发送消息
-	if err := client.cc.Write(&client.header, c.Args); err != nil {
+	if err := client.cc.Write(client.header, c.Args); err != nil {
 		call := client.removeCall(c.Seq)
 		if call != nil {
 			call.Error = err
@@ -244,4 +245,12 @@ func (client *Client) Go(serviceMethod string, args interface{}, reply interface
 		return nil, err
 	}
 	return call, nil
+}
+
+func XDail(rpcAddr string, option *Option) (*Client, error) {
+	s := strings.Split(rpcAddr, "@")
+	if len(s) != 2 {
+		return nil, errors.New("rpc client: available rpc addr")
+	}
+	return Dail(s[0], s[1], option)
 }

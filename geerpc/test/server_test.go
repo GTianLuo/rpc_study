@@ -37,7 +37,7 @@ func TestClient(t *testing.T) {
 			ServiceMethod: "Test.Add",
 			Seq:           uint64(i),
 		}
-		_ = cc.Write(h, fmt.Sprintf("geerpc request %d", h.Seq))
+		_ = cc.Write(*h, fmt.Sprintf("geerpc request %d", h.Seq))
 		_ = cc.ReadHeader(h)
 		var reply string
 		_ = cc.ReadBody(&reply)
@@ -62,7 +62,7 @@ func TestClient2(t *testing.T) {
 			ServiceMethod: "Test.Add",
 			Seq:           uint64(i),
 		}
-		_ = cc.Write(h, fmt.Sprintf("geerpc request %d", h.Seq))
+		_ = cc.Write(*h, fmt.Sprintf("geerpc request %d", h.Seq))
 		_ = cc.ReadHeader(h)
 		var reply string
 		_ = cc.ReadBody(&reply)

@@ -12,7 +12,7 @@ type Codec interface {
 	io.Closer
 	ReadHeader(*Header) error
 	ReadBody(interface{}) error
-	Write(*Header, interface{}) error
+	Write(Header, interface{}) error
 }
 
 type Type string
